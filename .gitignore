@@ -53,3 +53,4 @@ tools/cooja/dist/
 
 *.sky
 *.zoul
+*.testlog
