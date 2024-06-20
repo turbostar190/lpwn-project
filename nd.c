@@ -26,7 +26,7 @@ struct nd_callbacks app_cb = {
 /*---------------------------------------------------------------------------*/
 
 struct beacon_msg b = {
-  .node_id = NULL
+  .node_id = 0
 };
 
 static struct rtimer rt;
@@ -46,10 +46,10 @@ nd_recv(void)
    * least 3 bytes long (5 considering the CRC). 
    * If while you are testing you receive nothing make sure your packet is long enough
    */
-  printf("recv\n");
+  PRINTF("recv\n");
   if (!is_reception_window) return; // receiving period per limitare elaborazione dei recv
   if (packetbuf_datalen() != sizeof(struct beacon_msg)) {
-    printf("App: unexpected length: %d\n", packetbuf_datalen());
+    // printf("App: unexpected length: %d\n", packetbuf_datalen());
     return;
   }
 
@@ -58,12 +58,12 @@ nd_recv(void)
   packetbuf_clear();
 
   if (recv.node_id < 1 || recv.node_id > MAX_NBR || recv.node_id == node_id) { // 1..64
-    printf("App: unexpected node_id: %d\n", recv.node_id);
+    // printf("App: unexpected node_id: %d\n", recv.node_id);
     return;
   }
 
   if (!ids[recv.node_id]) {
-    printf("%u\n", recv.node_id);
+    PRINTF("%u\n", recv.node_id);
     ids[recv.node_id] = true;
     app_cb.nd_new_nbr(epoch_id, recv.node_id);
     new_nbrs++;
@@ -101,19 +101,18 @@ nd_start(uint8_t mode, const struct nd_callbacks *cb)
 static rtimer_clock_t this_epoch;
 static rtimer_clock_t next_epoch;
 
-#define NUM_TXS 50
-static int tx_count = 0;
+#define BURST_NUM_TXS 50
+static int burst_tx_count = 0;
 
-#define NUM_RXS 5
-static int rx_count = 0;
+#define BURST_NUM_RXS 5
+static int burst_rx_count = 0;
 
 void burst_tx(struct rtimer *t, void *ptr)
 {
   is_reception_window = false;
 
   if (!(bool)ptr) { // ptr is null or false if it's a new epoch transmission and not a burst phase
-
-    tx_count = 0;
+    burst_tx_count = 0; // reset tx counter 
 
     // reset discovered neighbours at new epoch
     int i = 0;
@@ -130,12 +129,15 @@ void burst_tx(struct rtimer *t, void *ptr)
   b.node_id = node_id;
 
   // printf("now:%u\n", RTIMER_NOW());
-  if (tx_count * T_DELAY < T_SLOT) {
+  if (burst_tx_count * T_DELAY < T_SLOT) {
     // PRINTF("%u-%u=%u,%u\n", RTIMER_NOW(), this_epoch, RTIMER_NOW() - this_epoch, T_SLOT);
     NETSTACK_RADIO.send(&b, sizeof(b));
-    tx_count++;
+    burst_tx_count++;
 
-    rtimer_set(&rt, RTIMER_NOW() + T_DELAY, 1, burst_tx, true);
+    void* p;
+    bool f = false;
+    p = &f;
+    rtimer_set(&rt, RTIMER_NOW() + T_DELAY, 1, burst_tx, p);
     PRINTF("->tx scheduled at %u, now:%u\n", RTIMER_NOW() + T_DELAY, RTIMER_NOW());
   } else {
     rtimer_set(&rt, RTIMER_TIME(&rt) + T_DELAY, 1, burst_rx, NULL);
@@ -170,22 +172,24 @@ void burst_off(struct rtimer *t, void *ptr)
   is_reception_window = false;
   NETSTACK_RADIO.off();
 
-  PRINTF("now:%u,time:%u,next:%u\n", RTIMER_NOW(), RTIMER_TIME(&rt), next_epoch);
-  if (rx_count < NUM_RXS) {
-    rx_count++;
+  if (burst_rx_count < BURST_NUM_RXS) {
+    burst_rx_count++;
+
     rtimer_set(&rt, RTIMER_NOW() + (X_SLOT - X_DELAY), 1, burst_rx, NULL);
     PRINTF("->rx scheduled at %u, now:%u\n", RTIMER_NOW() + (X_SLOT - X_DELAY), RTIMER_NOW());
-
   } else {
     app_cb.nd_epoch_end(epoch_id, new_nbrs);
     epoch_id++;
 
-    rx_count = 0;
+    burst_rx_count = 0; // reset rx counter
 
     rtimer_set(&rt, RTIMER_NOW() + X_DELAY, 1, burst_tx, NULL);
     PRINTF("->tx scheduled at %u, now:%u\n", RTIMER_NOW() + X_DELAY, RTIMER_NOW());
   }
 }
+
+/*---------------------------------------------------------------------------*/
+// SCATTER
 
 uint num_tx_windows = (EPOCH_INTERVAL_RT - X_SLOT) / T_SLOT;
 uint tx_window = 0;
