@@ -52,3 +52,4 @@ tools/cooja/build/
 tools/cooja/dist/
 
 *.sky
+*.zoul
