@@ -60,12 +60,15 @@ PROCESS_THREAD(app_process, ev, data)
   NETSTACK_RADIO.set_value(RADIO_PARAM_RX_MODE, 0);
 
   /* Wait at the beginning a random time to de-synchronize node start */
+  int random_seed_number = 1;
+  random_init(node_id + random_seed_number);
+
   etimer_set(&et, random_rand() % CLOCK_SECOND);
   PROCESS_WAIT_UNTIL(etimer_expired(&et));
   
   /* Start ND Primitive */
-  nd_start(ND_BURST, &rcb);
-  // nd_start(ND_SCATTER, &rcb);
+  // nd_start(ND_BURST, &rcb);
+  nd_start(ND_SCATTER, &rcb);
 
   /* Do nothing else */
   while (1) {
