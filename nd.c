@@ -156,12 +156,12 @@ void burst_off(struct rtimer *t, void *ptr)
   PRINTF("off, now:%u\n", RTIMER_NOW());
 
   if (NETSTACK_RADIO.receiving_packet()) {
-    printf("receiving packet\n");
+    PRINTF("receiving packet\n");
     packetbuf_clear();
   }
 
   if (NETSTACK_RADIO.pending_packet()) {
-    printf("pending packet\n");
+    PRINTF("pending packet\n");
     nd_recv();
   }
 
@@ -225,12 +225,12 @@ void scatter_rx(struct rtimer *t, void *ptr)
 void scatter_tx(struct rtimer *t, void *ptr) 
 {
   if (NETSTACK_RADIO.receiving_packet()) {
-    printf("receiving packet\n");
+    PRINTF("receiving packet\n");
     packetbuf_clear();
   }
 
   if (NETSTACK_RADIO.pending_packet()) {
-    printf("pending packet\n");
+    PRINTF("pending packet\n");
     nd_recv();
   }
 

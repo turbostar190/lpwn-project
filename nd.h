@@ -4,7 +4,7 @@
 /*---------------------------------------------------------------------------*/
 #define EPOCH_INTERVAL_RT (RTIMER_SECOND)
 #define T_SLOT (EPOCH_INTERVAL_RT / 10)
-#define X_SLOT (EPOCH_INTERVAL_RT - T_SLOT) / 10 // num
+#define X_SLOT (EPOCH_INTERVAL_RT - T_SLOT) / 10 // times
 #define T_DELAY (T_SLOT / 100)
 #define X_DELAY (X_SLOT / 50)
 /*---------------------------------------------------------------------------*/
