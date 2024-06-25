@@ -32,9 +32,18 @@ struct beacon_msg b = {
 static struct rtimer rt;
 
 static uint16_t epoch_id = 0;
-static bool ids[MAX_NBR+1] = {false}; // vettore di booleani (bitmap) come struttura dati per salvare i vicini. Max dim: MAX_NBR
-static uint16_t new_nbrs = 0;
+static bool ids[MAX_NBR+1] = {false}; // neighbour list to tracks discovery
+static uint8_t epoch_new_nbrs = 0;
 static bool is_reception_window;
+
+void reset_epoch() {
+  int i = 0;
+  for (i = 0; i < MAX_NBR+1; i++) {
+    ids[i] = false;
+  }
+
+  epoch_new_nbrs = 0;
+}
 
 void
 nd_recv(void)
@@ -49,7 +58,7 @@ nd_recv(void)
   PRINTF("recv\n");
   if (!is_reception_window) return; // receiving period per limitare elaborazione dei recv
   if (packetbuf_datalen() != sizeof(struct beacon_msg)) {
-    // printf("App: unexpected length: %d\n", packetbuf_datalen());
+    PRINTF("App: unexpected length: %d\n", packetbuf_datalen());
     return;
   }
 
@@ -58,15 +67,16 @@ nd_recv(void)
   packetbuf_clear();
 
   if (recv.node_id < 1 || recv.node_id > MAX_NBR || recv.node_id == node_id) { // 1..64
-    // printf("App: unexpected node_id: %d\n", recv.node_id);
+    PRINTF("App: unexpected node_id: %d\n", recv.node_id);
     return;
   }
 
   if (!ids[recv.node_id]) {
+    // new neighbour, not found yet
     PRINTF("%u\n", recv.node_id);
     ids[recv.node_id] = true;
     app_cb.nd_new_nbr(epoch_id, recv.node_id);
-    new_nbrs++;
+    epoch_new_nbrs++;
   }
 }
 /*---------------------------------------------------------------------------*/
@@ -76,11 +86,7 @@ nd_start(uint8_t mode, const struct nd_callbacks *cb)
   app_cb.nd_epoch_end = cb->nd_epoch_end;
   app_cb.nd_new_nbr = cb->nd_new_nbr;
 
-  int i = 0;
-  for (i = 0; i < MAX_NBR+1; i++) {
-    ids[i] = false;
-  }
-  new_nbrs = 0;
+  reset_epoch();
 
   if (mode == ND_BURST) {
     printf("ND_BURST\n");
@@ -99,10 +105,10 @@ static rtimer_clock_t this_epoch;
 static rtimer_clock_t next_epoch;
 
 #define BURST_NUM_TXS 50
-static int burst_tx_count = 0;
+static uint8_t burst_tx_count = 0;
 
 #define BURST_NUM_RXS 5
-static int burst_rx_count = 0;
+static uint8_t burst_rx_count = 0;
 
 void burst_tx(struct rtimer *t, void *ptr)
 {
@@ -112,27 +118,22 @@ void burst_tx(struct rtimer *t, void *ptr)
     burst_tx_count = 0; // reset tx counter 
 
     // reset discovered neighbours at new epoch
-    int i = 0;
-    for (i = 0; i < MAX_NBR+1; i++) {
-      ids[i] = false;
-    }
-    new_nbrs = 0;
+    reset_epoch();
 
     PRINTF("%u, %u, %u, %u, %u\n", EPOCH_INTERVAL_RT, T_SLOT, X_SLOT, T_DELAY, X_DELAY);
     this_epoch = RTIMER_NOW();
     next_epoch = this_epoch + EPOCH_INTERVAL_RT;
   }
 
-  b.node_id = node_id;
-
   if (burst_tx_count * T_DELAY < T_SLOT) {
     // PRINTF("%u-%u=%u,%u\n", RTIMER_NOW(), this_epoch, RTIMER_NOW() - this_epoch, T_SLOT);
+    b.node_id = node_id;
     NETSTACK_RADIO.send(&b, sizeof(b));
     burst_tx_count++;
 
     void* p;
     bool f = false;
-    p = &f;
+    p = &f; // avoid compiler warning
     rtimer_set(&rt, RTIMER_NOW() + T_DELAY, 1, burst_tx, p);
     PRINTF("->tx scheduled at %u, now:%u\n", RTIMER_NOW() + T_DELAY, RTIMER_NOW());
   } else {
@@ -174,7 +175,7 @@ void burst_off(struct rtimer *t, void *ptr)
     rtimer_set(&rt, RTIMER_NOW() + (X_SLOT - X_DELAY), 1, burst_rx, NULL);
     PRINTF("->rx scheduled at %u, now:%u\n", RTIMER_NOW() + (X_SLOT - X_DELAY), RTIMER_NOW());
   } else {
-    app_cb.nd_epoch_end(epoch_id, new_nbrs);
+    app_cb.nd_epoch_end(epoch_id, epoch_new_nbrs);
     epoch_id++;
 
     burst_rx_count = 0; // reset rx counter
@@ -190,7 +191,7 @@ void burst_off(struct rtimer *t, void *ptr)
 // SCATTER
 
 #define SCATTER_NUM_TXS ((EPOCH_INTERVAL_RT - T_SLOT) / (X_SLOT - X_DELAY))
-static uint tx_window = 0;
+static uint16_t tx_window = 0;
 static bool is_epoch_zero = true;
 
 void scatter_rx(struct rtimer *t, void *ptr) 
@@ -200,18 +201,14 @@ void scatter_rx(struct rtimer *t, void *ptr)
   // this callback fn is called at every epoch start, 
   // but the application must be notified at epoch end
   if (!is_epoch_zero) { 
-    app_cb.nd_epoch_end(epoch_id, new_nbrs);
+    app_cb.nd_epoch_end(epoch_id, epoch_new_nbrs);
     epoch_id++;
     tx_window = 0;
   }
   is_epoch_zero = false;
 
   // reset discovered neighbours at new epoch
-  int i = 0;
-  for (i = 0; i < MAX_NBR+1; i++) {
-    ids[i] = false;
-  }
-  new_nbrs = 0;
+  reset_epoch();
 
   // printf("%u, %u, %u, %u, %u\n", EPOCH_INTERVAL_RT, T_SLOT, X_SLOT, T_DELAY, R_DELAY);
   this_epoch = RTIMER_NOW();

@@ -38,4 +38,5 @@ void burst_off(struct rtimer *t, void *ptr);
 
 void scatter_tx(struct rtimer *t, void *ptr);
 void scatter_rx(struct rtimer *t, void *ptr);
-void scatter_off(struct rtimer *t, void *ptr);
+
+void reset_epoch();
