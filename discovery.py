@@ -30,8 +30,6 @@ def parse_file(log_file, testbed=False):
 
     epoch = 0
 
-    total_nbr = 0
-
     # Parse log file and add data to CSV files
     with open(log_file, 'r') as f:
         for line in f:
@@ -48,7 +46,7 @@ def parse_file(log_file, testbed=False):
 
                 d['self_id'] = int(d['self_id'])
                 d['epoch_num'] = int(d['epoch_num'])
-                epoch = d['epoch_num']
+                epoch = max(d['epoch_num'], epoch)
                 d['num_nbr'] = int(d['num_nbr'])
 
                 if data.get(d['self_id']) is None:
@@ -73,9 +71,9 @@ def parse_file(log_file, testbed=False):
     for nid in ordered_keys:
         v = data[nid]
 
-        teoretical_max_nbrs = (available_nbrs * epoch)
+        teoretical_max_nbrs = (available_nbrs * (epoch+1))
         dr = (v['total_nbr'] / teoretical_max_nbrs)
-        print("Node {}: {} out of {} on {} epochs = {:.1%}".format(nid, v['total_nbr'], teoretical_max_nbrs, epoch, dr))
+        print("Node {}: {} out of {} on {} epochs = {:.2%}".format(nid, v['total_nbr'], teoretical_max_nbrs, epoch+1, dr))
 
         dr_lst.append(dr*100)
         
@@ -86,8 +84,8 @@ def parse_file(log_file, testbed=False):
     dc_std = math.sqrt(sum([(v - dc_mean)**2 for v in dr_lst]) / len(dr_lst))
 
     print("\n----- Discovery Rate Overall Statistics -----\n")
-    print("Average Discovery Rate: {:.1f}%\nStandard Deviation: {:.1f}\n"
-          "Minimum: {:.1f}%\nMaximum: {:.1f}%\n".format(dc_mean,
+    print("Average Discovery Rate: {:.2f}%\nStandard Deviation: {:.2f}\n"
+          "Minimum: {:.2f}%\nMaximum: {:.2f}%\n".format(dc_mean,
                                                         dc_std, dc_min,
                                                         dc_max))
 
