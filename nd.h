@@ -2,11 +2,19 @@
 #define ND_BURST 1
 #define ND_SCATTER 2
 /*---------------------------------------------------------------------------*/
+
+#define BURST_NUM_RXS 15
+
 #define EPOCH_INTERVAL_RT (RTIMER_SECOND)
-#define T_SLOT (EPOCH_INTERVAL_RT / 10)
-#define X_SLOT (EPOCH_INTERVAL_RT - T_SLOT) / 10 // times
-#define T_DELAY (T_SLOT / 100)
-#define X_DELAY (X_SLOT / 50)
+#define T_SLOT ((EPOCH_INTERVAL_RT / 10) * 2) // 100ms * x
+#define X_SLOT (EPOCH_INTERVAL_RT - T_SLOT) / BURST_NUM_RXS
+#define T_DELAY (T_SLOT / 10) // times (20ms?)
+#define X_DELAY (X_SLOT / 6) // rx duration in burst
+
+#define BURST_NUM_TXS (T_SLOT / T_DELAY)
+
+#define SCATTER_NUM_TXS ((EPOCH_INTERVAL_RT - T_SLOT) / (X_SLOT - X_DELAY))
+
 /*---------------------------------------------------------------------------*/
 #define MAX_NBR 64 /* Maximum number of neighbors */
 /*---------------------------------------------------------------------------*/

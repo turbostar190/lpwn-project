@@ -1,4 +1,4 @@
-#define RANDOM_SEED_NUMBER 30
+#define RANDOM_SEED_NUMBER 15
 
 #include "contiki.h"
 #include "dev/radio.h"
@@ -63,7 +63,7 @@ PROCESS_THREAD(app_process, ev, data)
   NETSTACK_RADIO.set_value(RADIO_PARAM_RX_MODE, 0);
 
   /* Wait at the beginning a random time to de-synchronize node start */
-  random_init(node_id + RANDOM_SEED_NUMBER);
+  random_init(node_id * RANDOM_SEED_NUMBER);
 
   etimer_set(&et, random_rand() % CLOCK_SECOND);
   PROCESS_WAIT_UNTIL(etimer_expired(&et));

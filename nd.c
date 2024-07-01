@@ -101,13 +101,8 @@ nd_start(uint8_t mode, const struct nd_callbacks *cb)
 }
 /*---------------------------------------------------------------------------*/
 
-static rtimer_clock_t this_epoch;
-static rtimer_clock_t next_epoch;
-
-#define BURST_NUM_TXS 50
 static uint8_t burst_tx_count = 0;
 
-#define BURST_NUM_RXS 5
 static uint8_t burst_rx_count = 0;
 
 void burst_tx(struct rtimer *t, void *ptr)
@@ -119,14 +114,9 @@ void burst_tx(struct rtimer *t, void *ptr)
 
     // reset discovered neighbours at new epoch
     reset_epoch();
-
-    PRINTF("%u, %u, %u, %u, %u\n", EPOCH_INTERVAL_RT, T_SLOT, X_SLOT, T_DELAY, X_DELAY);
-    this_epoch = RTIMER_NOW();
-    next_epoch = this_epoch + EPOCH_INTERVAL_RT;
   }
 
-  if (burst_tx_count * T_DELAY < T_SLOT) {
-    // PRINTF("%u-%u=%u,%u\n", RTIMER_NOW(), this_epoch, RTIMER_NOW() - this_epoch, T_SLOT);
+  if (burst_tx_count < BURST_NUM_TXS) {
     b.node_id = node_id;
     NETSTACK_RADIO.send(&b, sizeof(b));
     burst_tx_count++;
@@ -134,31 +124,26 @@ void burst_tx(struct rtimer *t, void *ptr)
     void* p;
     bool f = false;
     p = &f; // avoid compiler warning
-    rtimer_set(&rt, RTIMER_NOW() + T_DELAY, 1, burst_tx, p);
-    PRINTF("->tx scheduled at %u, now:%u\n", RTIMER_NOW() + T_DELAY, RTIMER_NOW());
+    rtimer_set(&rt, RTIMER_NOW() + T_DELAY - (unsigned)US_TO_RTIMERTICKS(random_rand() % 5000), 1, burst_tx, p);
   } else {
-    rtimer_set(&rt, RTIMER_TIME(&rt) + T_DELAY, 1, burst_rx, NULL);
-    PRINTF("->rx scheduled at %u, now:%u\n", RTIMER_TIME(&rt) + T_DELAY, RTIMER_NOW());
+    burst_rx(&rt, NULL);
   }
 }
 
 void burst_rx(struct rtimer *t, void *ptr)
 {
   is_reception_window = true;
-  PRINTF("rx, now:%u\n", RTIMER_NOW());
   NETSTACK_RADIO.on();
   
   rtimer_set(&rt, RTIMER_NOW() + X_DELAY, 1, burst_off, NULL);
-  PRINTF("->off scheduled at %u, now:%u\n", RTIMER_NOW() + X_DELAY, RTIMER_NOW());
 }
 
 void burst_off(struct rtimer *t, void *ptr)
 {
-  PRINTF("off, now:%u\n", RTIMER_NOW());
-
   if (NETSTACK_RADIO.receiving_packet()) {
     PRINTF("receiving packet\n");
-    packetbuf_clear();
+    // packetbuf_clear();
+    nd_recv();
   }
 
   if (NETSTACK_RADIO.pending_packet()) {
@@ -172,16 +157,14 @@ void burst_off(struct rtimer *t, void *ptr)
   if (burst_rx_count < BURST_NUM_RXS) {
     burst_rx_count++;
 
-    rtimer_set(&rt, RTIMER_NOW() + (X_SLOT - X_DELAY), 1, burst_rx, NULL);
-    PRINTF("->rx scheduled at %u, now:%u\n", RTIMER_NOW() + (X_SLOT - X_DELAY), RTIMER_NOW());
+    rtimer_set(&rt, RTIMER_TIME(&rt) + (X_SLOT - X_DELAY), 1, burst_rx, NULL);
   } else {
     app_cb.nd_epoch_end(epoch_id, epoch_new_nbrs);
     epoch_id++;
 
     burst_rx_count = 0; // reset rx counter
 
-    rtimer_set(&rt, RTIMER_NOW() + X_DELAY, 1, burst_tx, NULL);
-    PRINTF("->tx scheduled at %u, now:%u\n", RTIMER_NOW() + X_DELAY, RTIMER_NOW());
+    burst_tx(&rt, NULL);
   }
 }
 
@@ -190,7 +173,6 @@ void burst_off(struct rtimer *t, void *ptr)
 /*---------------------------------------------------------------------------*/
 // SCATTER
 
-#define SCATTER_NUM_TXS ((EPOCH_INTERVAL_RT - T_SLOT) / (X_SLOT - X_DELAY))
 static uint16_t tx_window = 0;
 static bool is_epoch_zero = true;
 
@@ -210,10 +192,6 @@ void scatter_rx(struct rtimer *t, void *ptr)
   // reset discovered neighbours at new epoch
   reset_epoch();
 
-  // printf("%u, %u, %u, %u, %u\n", EPOCH_INTERVAL_RT, T_SLOT, X_SLOT, T_DELAY, R_DELAY);
-  this_epoch = RTIMER_NOW();
-  next_epoch = this_epoch + EPOCH_INTERVAL_RT;
-
   NETSTACK_RADIO.on();
 
   rtimer_set(&rt, RTIMER_NOW() + T_SLOT, 1, scatter_tx, NULL);
@@ -223,7 +201,8 @@ void scatter_tx(struct rtimer *t, void *ptr)
 {
   if (NETSTACK_RADIO.receiving_packet()) {
     PRINTF("receiving packet\n");
-    packetbuf_clear();
+    // packetbuf_clear();
+    nd_recv();
   }
 
   if (NETSTACK_RADIO.pending_packet()) {
@@ -237,11 +216,10 @@ void scatter_tx(struct rtimer *t, void *ptr)
   b.node_id = node_id;
   NETSTACK_RADIO.send(&b, sizeof(b));
 
-  PRINTF("tx_w:%u, num:%u\n", tx_window, SCATTER_NUM_TXS);
   if (tx_window < SCATTER_NUM_TXS) {
     tx_window++;
-    rtimer_set(&rt, RTIMER_NOW() + (X_SLOT - X_DELAY), 1, scatter_tx, NULL);
+    rtimer_set(&rt, RTIMER_NOW() + (X_SLOT - X_DELAY) - (unsigned)US_TO_RTIMERTICKS(random_rand() % 5000), 1, scatter_tx, NULL);
   } else {
-    rtimer_set(&rt, RTIMER_TIME(&rt) + T_SLOT, 1, scatter_rx, NULL);
+    scatter_rx(&rt, NULL);
   }
 }
