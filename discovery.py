@@ -28,7 +28,9 @@ def parse_file(log_file, testbed=False):
 
     data = {}
 
-    epoch = 0
+    epochs = 0
+
+    time = None
 
     # Parse log file and add data to CSV files
     with open(log_file, 'r') as f:
@@ -39,41 +41,46 @@ def parse_file(log_file, testbed=False):
                 d = m.groupdict()
                 if testbed:
                     ts = datetime.strptime(d["time"], '%Y-%m-%d %H:%M:%S,%f')
+                    if time is None:
+                        time = ts
                     ts = ts.timestamp()
                 else:
                     ts = d["time"]
 
-
                 d['self_id'] = int(d['self_id'])
                 d['epoch_num'] = int(d['epoch_num'])
-                epoch = max(d['epoch_num'], epoch)
                 d['num_nbr'] = int(d['num_nbr'])
 
                 if data.get(d['self_id']) is None:
                     data[d['self_id']] = {
                         'self_id': d['self_id'],
                         'epoch_num': 0,
-                        'num_nbr': 0,
+                        'num_nbr': [],
                         'total_nbr': 0,
                     }
 
                 data[d['self_id']]['epoch_num'] = d['epoch_num']
 
-                data[d['self_id']]['num_nbr'] = d['num_nbr']
+                data[d['self_id']]['num_nbr'].append(d['num_nbr'])
                 data[d['self_id']]['total_nbr'] += d['num_nbr']
+
+    if testbed: 
+        print(f"Time: {time}")
 
     # Analyse and print the data
     dr_lst = []
 
     # nodes
+    epochs = max([v['epoch_num'] for v in data.values()]) + 1 # zero based
     ordered_keys = sorted(data.keys())
     available_nbrs = len(ordered_keys) - 1
+    print(f"Epochs: {epochs}, Nodes: {len(ordered_keys)} {ordered_keys}")
     for nid in ordered_keys:
         v = data[nid]
 
-        teoretical_max_nbrs = (available_nbrs * (epoch+1))
+        teoretical_max_nbrs = (available_nbrs * (epochs))
         dr = (v['total_nbr'] / teoretical_max_nbrs)
-        print("Node {}: {} out of {} on {} epochs = {:.2%}".format(nid, v['total_nbr'], teoretical_max_nbrs, epoch+1, dr))
+        print("Node {}: {} ({}) out of {} on {} epochs = {:.2%}".format(nid, v['total_nbr'], sum(v['num_nbr']),teoretical_max_nbrs, epochs, dr))
 
         dr_lst.append(dr*100)
         

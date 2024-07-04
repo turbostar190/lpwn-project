@@ -4,9 +4,6 @@ import os
 import time
 import sys
 
-random_numbers = [5, 10, 15]
-simulations = [2, 5, 10, 20, 30, 50]
-
 # get parameters from command line
 if len(sys.argv) != 2:
   print("Usage: python3 run.py <test_name>")
@@ -17,16 +14,21 @@ if test_name not in ['burst', 'scatter']:
   sys.exit(1)
 
 
+random_numbers = [5, 10, 15]
+simulations = [2, 5, 10, 20, 30, 50]
+
 # get now datetime as YYMMDD_HHMMSS
 now = time.strftime('%y%m%d_%H%M%S')
 filename = "app.c"
 
+os.system('make clean')
+
 for sim in simulations:
-  print(f'Running simulation {sim}')
-  #write first line of a file and keep the remaining file
+  print(f'Running simulation n:{sim}')
 
   for n in random_numbers:
     print(f'Compiling with random seed number {n}')
+    
     # write first line of a file and keep the remaining file
     with open(filename, 'r') as f:
       lines = f.readlines()
