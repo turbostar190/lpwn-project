@@ -16,7 +16,7 @@
 #define SCATTER_NUM_TXS ((EPOCH_INTERVAL_RT - T_SLOT) / (X_SLOT - X_DELAY))
 
 /*---------------------------------------------------------------------------*/
-#define MAX_NBR 64 /* Maximum number of neighbors */
+#define MAX_NBR 156 // 64 /* Maximum number of neighbors, 156 on testbed */
 /*---------------------------------------------------------------------------*/
 void nd_recv(void); /* Called by lower layers when a message is received */
 /*---------------------------------------------------------------------------*/
@@ -40,11 +40,11 @@ struct beacon_msg
   uint8_t dummy;
 } __attribute__((packed));
 
+void reset_epoch();
+
 void burst_tx(struct rtimer *t, void *ptr);
 void burst_rx(struct rtimer *t, void *ptr);
 void burst_off(struct rtimer *t, void *ptr);
 
 void scatter_tx(struct rtimer *t, void *ptr);
 void scatter_rx(struct rtimer *t, void *ptr);
-
-void reset_epoch();

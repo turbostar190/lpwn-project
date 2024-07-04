@@ -37,6 +37,7 @@ static uint8_t epoch_new_nbrs = 0;
 static bool is_reception_window;
 
 void reset_epoch() {
+  PRINTF("ID %u: reset epoch\n", node_id);
   int i = 0;
   for (i = 0; i < MAX_NBR+1; i++) {
     ids[i] = false;
@@ -55,10 +56,15 @@ nd_recv(void)
    * least 3 bytes long (5 considering the CRC). 
    * If while you are testing you receive nothing make sure your packet is long enough
    */
-  PRINTF("recv\n");
-  if (!is_reception_window) return; // receiving period per limitare elaborazione dei recv
+  // PRINTF("recv\n");
+  if (!is_reception_window) { // receiving period per limitare elaborazione dei recv
+    PRINTF("not reception window\n");
+    packetbuf_clear();
+    return;
+  }
   if (packetbuf_datalen() != sizeof(struct beacon_msg)) {
-    PRINTF("App: unexpected length: %d\n", packetbuf_datalen());
+    PRINTF("unexpected length: %d\n", packetbuf_datalen());
+    packetbuf_clear();
     return;
   }
 
@@ -66,16 +72,20 @@ nd_recv(void)
   memcpy(&recv, packetbuf_dataptr(), sizeof(recv));
   packetbuf_clear();
 
-  if (recv.node_id < 1 || recv.node_id > MAX_NBR || recv.node_id == node_id) { // 1..64
-    PRINTF("App: unexpected node_id: %d\n", recv.node_id);
+  uint16_t recv_nid = recv.node_id;
+
+  if (recv_nid < 1 || recv_nid > MAX_NBR || recv_nid == node_id) { // 1..MAX_NBR
+    PRINTF("unexpected node_id: %d\n", recv_nid);
     return;
   }
 
-  if (!ids[recv.node_id]) {
+  PRINTF("recv.node_id: %u\n", recv_nid);
+
+  if (!ids[recv_nid]) {
     // new neighbour, not found yet
-    PRINTF("%u\n", recv.node_id);
-    ids[recv.node_id] = true;
-    app_cb.nd_new_nbr(epoch_id, recv.node_id);
+    PRINTF("ids[%u] is now true\n", recv_nid);
+    ids[recv_nid] = true;
+    app_cb.nd_new_nbr(epoch_id, recv_nid);
     epoch_new_nbrs++;
   }
 }
@@ -90,11 +100,10 @@ nd_start(uint8_t mode, const struct nd_callbacks *cb)
 
   if (mode == ND_BURST) {
     printf("ND_BURST\n");
-    rtimer_set(&rt, RTIMER_NOW(), 1, burst_tx, NULL);
+    burst_tx(&rt, NULL);
   } else if (mode == ND_SCATTER) {
     printf("ND_SCATTER\n");
-    // contare beacon perché la radio potrebbe non spegnersi mai
-    rtimer_set(&rt, RTIMER_NOW(), 1, scatter_rx, NULL);
+    scatter_rx(&rt, NULL);
   } else {
     printf("error: invalid mode\n");
   }
@@ -102,7 +111,6 @@ nd_start(uint8_t mode, const struct nd_callbacks *cb)
 /*---------------------------------------------------------------------------*/
 
 static uint8_t burst_tx_count = 0;
-
 static uint8_t burst_rx_count = 0;
 
 void burst_tx(struct rtimer *t, void *ptr)
@@ -122,9 +130,10 @@ void burst_tx(struct rtimer *t, void *ptr)
     burst_tx_count++;
 
     void* p;
-    bool f = false;
+    bool f = true;
     p = &f; // avoid compiler warning
-    rtimer_set(&rt, RTIMER_NOW() + T_DELAY - (unsigned)US_TO_RTIMERTICKS(random_rand() % 5000), 1, burst_tx, p);
+    unsigned short random_us = random_rand() % (5 * 1000); // up to 5 milliseconds
+    rtimer_set(&rt, RTIMER_NOW() + T_DELAY - (unsigned)US_TO_RTIMERTICKS(random_us), 1, burst_tx, p);
   } else {
     burst_rx(&rt, NULL);
   }
@@ -143,18 +152,19 @@ void burst_off(struct rtimer *t, void *ptr)
   if (NETSTACK_RADIO.receiving_packet()) {
     PRINTF("receiving packet\n");
     // packetbuf_clear();
-    nd_recv();
-  }
-
-  if (NETSTACK_RADIO.pending_packet()) {
-    PRINTF("pending packet\n");
-    nd_recv();
+    rtimer_set(&rt, RTIMER_NOW() + (unsigned)US_TO_RTIMERTICKS(500), 1, burst_off, NULL);
+    return;
   }
 
   is_reception_window = false;
   NETSTACK_RADIO.off();
 
-  if (burst_rx_count < BURST_NUM_RXS) {
+  if (NETSTACK_RADIO.pending_packet()) {
+    PRINTF("pending packet\n");
+    NETSTACK_RADIO.read(packetbuf_dataptr(), PACKETBUF_SIZE);
+  }
+
+  if (burst_rx_count < BURST_NUM_RXS-1) {
     burst_rx_count++;
 
     rtimer_set(&rt, RTIMER_TIME(&rt) + (X_SLOT - X_DELAY), 1, burst_rx, NULL);
@@ -164,7 +174,7 @@ void burst_off(struct rtimer *t, void *ptr)
 
     burst_rx_count = 0; // reset rx counter
 
-    burst_tx(&rt, NULL);
+    rtimer_set(&rt, RTIMER_TIME(&rt) + (X_SLOT - X_DELAY), 1, burst_tx, NULL);
   }
 }
 
@@ -173,25 +183,24 @@ void burst_off(struct rtimer *t, void *ptr)
 /*---------------------------------------------------------------------------*/
 // SCATTER
 
-static uint16_t tx_window = 0;
+static uint16_t scatter_tx_count = 0;
 static bool is_epoch_zero = true;
 
 void scatter_rx(struct rtimer *t, void *ptr) 
 {
-  is_reception_window = true;
-
   // this callback fn is called at every epoch start, 
   // but the application must be notified at epoch end
   if (!is_epoch_zero) { 
     app_cb.nd_epoch_end(epoch_id, epoch_new_nbrs);
     epoch_id++;
-    tx_window = 0;
+    scatter_tx_count = 0;
   }
   is_epoch_zero = false;
 
   // reset discovered neighbours at new epoch
   reset_epoch();
 
+  is_reception_window = true;
   NETSTACK_RADIO.on();
 
   rtimer_set(&rt, RTIMER_NOW() + T_SLOT, 1, scatter_tx, NULL);
@@ -199,26 +208,45 @@ void scatter_rx(struct rtimer *t, void *ptr)
 
 void scatter_tx(struct rtimer *t, void *ptr) 
 {
-  if (NETSTACK_RADIO.receiving_packet()) {
+  /*if (NETSTACK_RADIO.receiving_packet()) {
     PRINTF("receiving packet\n");
-    // packetbuf_clear();
-    nd_recv();
-  }
-
+    rtimer_set(&rt, RTIMER_NOW() + (unsigned)US_TO_RTIMERTICKS(500), 1, scatter_tx, NULL);
+    return;
+  }*/
   if (NETSTACK_RADIO.pending_packet()) {
     PRINTF("pending packet\n");
-    nd_recv();
+    NETSTACK_RADIO.read(packetbuf_dataptr(), PACKETBUF_SIZE);
   }
 
   is_reception_window = false;
   NETSTACK_RADIO.off();
+  packetbuf_clear();
+
+  radio_value_t radio_status;
+  NETSTACK_RADIO.get_value(RADIO_PARAM_POWER_MODE, &radio_status);
+  if (radio_status == RADIO_POWER_MODE_ON) {
+    printf("status: %d\n", radio_status);
+    // NETSTACK_RADIO.off(); // try again?...
+  }
+
+  unsigned short random_us = random_rand() % (5 * 1000); // up to 5 milliseconds
 
   b.node_id = node_id;
-  NETSTACK_RADIO.send(&b, sizeof(b));
+  /*if (!NETSTACK_RADIO.channel_clear()) {
+    rtimer_set(&rt, RTIMER_NOW() + (X_SLOT - X_DELAY) - (unsigned)US_TO_RTIMERTICKS(random_us), 1, scatter_tx, NULL);
+    return;
+  }*/
 
-  if (tx_window < SCATTER_NUM_TXS) {
-    tx_window++;
-    rtimer_set(&rt, RTIMER_NOW() + (X_SLOT - X_DELAY) - (unsigned)US_TO_RTIMERTICKS(random_rand() % 5000), 1, scatter_tx, NULL);
+  int send_status = NETSTACK_RADIO.send(&b, sizeof(b));
+  if (send_status == RADIO_TX_COLLISION) {
+    PRINTF("collision\n");
+    rtimer_set(&rt, RTIMER_NOW() + (X_SLOT - X_DELAY) - (unsigned)US_TO_RTIMERTICKS(random_us), 1, scatter_tx, NULL);
+    return;
+  }
+
+  if (scatter_tx_count < SCATTER_NUM_TXS-1) {
+    scatter_tx_count++;
+    rtimer_set(&rt, RTIMER_NOW() + (X_SLOT - X_DELAY), 1, scatter_tx, NULL);
   } else {
     scatter_rx(&rt, NULL);
   }
