@@ -14,7 +14,7 @@ tags
 *.lss
 *.map
 
-symbols.[ch]
+*/**/symbols.[ch]
 #examples/*/symbols.c
 #examples/*/symbols.h
 
