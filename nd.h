@@ -3,17 +3,18 @@
 #define ND_SCATTER 2
 /*---------------------------------------------------------------------------*/
 
-#define BURST_NUM_RXS 15
-
 #define EPOCH_INTERVAL_RT (RTIMER_SECOND)
-#define T_SLOT ((EPOCH_INTERVAL_RT / 10) * 2) // 100ms * x
-#define X_SLOT (EPOCH_INTERVAL_RT - T_SLOT) / BURST_NUM_RXS
-#define T_DELAY (T_SLOT / 10) // times (20ms?)
-#define X_DELAY (X_SLOT / 6) // rx duration in burst
 
-#define BURST_NUM_TXS (T_SLOT / T_DELAY)
+#define BURST_T_SLOT ((EPOCH_INTERVAL_RT / 10) * 3) // 200ms // 300ms
+#define BURST_T_DELAY (BURST_T_SLOT / 10) // 20ms // 30ms
+#define BURST_X_SLOT (((EPOCH_INTERVAL_RT - BURST_T_SLOT) / 100) * 5) // 40ms // 35ms
+#define BURST_X_DUR (BURST_X_SLOT / 5) // 8ms // 7ms
+#define BURST_NUM_RXS ((EPOCH_INTERVAL_RT - BURST_T_SLOT) / BURST_X_SLOT) // 20 times
+#define BURST_NUM_TXS (BURST_T_SLOT / BURST_T_DELAY) // 10 times
 
-#define SCATTER_NUM_TXS ((EPOCH_INTERVAL_RT - T_SLOT) / (X_SLOT - X_DELAY))
+#define SCATTER_T_SLOT ((EPOCH_INTERVAL_RT / 10) * 2) // 200ms
+#define SCATTER_X_SLOT ((EPOCH_INTERVAL_RT / 100) * 8) // 80ms
+#define SCATTER_NUM_TXS ((EPOCH_INTERVAL_RT - SCATTER_T_SLOT) / SCATTER_X_SLOT) // 10 times
 
 /*---------------------------------------------------------------------------*/
 #define MAX_NBR 156 // 64 /* Maximum number of neighbors, 156 on testbed */

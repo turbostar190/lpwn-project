@@ -55,6 +55,17 @@ PROCESS_THREAD(app_process, ev, data)
   printf("Node ID: %u\n", node_id);
   printf("RTIMER_SECOND: %u\n", RTIMER_SECOND);
   printf("RANDOM_SEED_NUMBER: %u\n", RANDOM_SEED_NUMBER);
+
+  printf("BURST_T_SLOT: %ldms\n", RTIMERTICKS_TO_US_64(BURST_T_SLOT)/1000);
+  printf("BURST_T_DELAY: %ldms\n", RTIMERTICKS_TO_US_64(BURST_T_DELAY)/1000);
+  printf("BURST_X_SLOT: %ldms\n", RTIMERTICKS_TO_US_64(BURST_X_SLOT)/1000);
+  printf("BURST_X_DUR: %ldms\n", RTIMERTICKS_TO_US_64(BURST_X_DUR)/1000);
+  printf("BURST_NUM_RXS: %d\n", BURST_NUM_RXS);
+  printf("BURST_NUM_TXS: %d\n", BURST_NUM_TXS);
+
+  printf("SCATTER_T_SLOT: %ldms\n", RTIMERTICKS_TO_US_64(SCATTER_T_SLOT)/1000);
+  printf("SCATTER_X_SLOT: %ldms\n", RTIMERTICKS_TO_US_64(SCATTER_X_SLOT)/1000);
+  printf("SCATTER_NUM_TXS: %d\n", SCATTER_NUM_TXS);
   
   /* Begin with radio off */
   NETSTACK_RADIO.off();
