@@ -71,16 +71,16 @@ def parse_file(log_file, testbed=False):
     dr_lst = []
 
     # nodes
-    epochs = max([v['epoch_num'] for v in data.values()]) + 1 # zero based
+    # epochs = max([v['epoch_num'] for v in data.values()]) + 1 # zero based
     ordered_keys = sorted(data.keys())
     available_nbrs = len(ordered_keys) - 1
-    print(f"Epochs: {epochs}, Nodes: {len(ordered_keys)} {ordered_keys}")
+    print(f"Nodes: {len(ordered_keys)} {ordered_keys}")
     for nid in ordered_keys:
         v = data[nid]
 
-        teoretical_max_nbrs = (available_nbrs * (epochs))
-        dr = (v['total_nbr'] / teoretical_max_nbrs)
-        print("Node {}: {} ({}) out of {} on {} epochs = {:.2%}".format(nid, v['total_nbr'], sum(v['num_nbr']),teoretical_max_nbrs, epochs, dr))
+        theoretical_max_nbrs = (available_nbrs * (v['epoch_num']+1))
+        dr = (v['total_nbr'] / theoretical_max_nbrs)
+        print("Node {}: {} ({}) out of {} on {} epochs = {:.2%}".format(nid, v['total_nbr'], sum(v['num_nbr']), theoretical_max_nbrs, v['epoch_num']+1, dr))
 
         dr_lst.append(dr*100)
         
